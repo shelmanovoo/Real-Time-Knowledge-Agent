@@ -1,0 +1,171 @@
+{
+  "name": "kafka+postgresql_2",
+  "nodes": [
+    {
+      "parameters": {
+        "topic": "documents",
+        "groupId": "n8n-client",
+        "options": {}
+      },
+      "id": "3015b159-7aa3-409d-b6ee-83133f5339cb",
+      "name": "Kafka Trigger",
+      "type": "n8n-nodes-base.kafkaTrigger",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        192
+      ],
+      "credentials": {
+        "kafka": {
+          "id": "9GjMLtsV0VCbvSS5",
+          "name": "Kafka account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const payload = $json.message || $json.payload || $json.body || $json.text || ''; return [{ json: { id: $json.id || String(Date.now()), text: String(payload) } }];"
+      },
+      "id": "55b96fd3-cc19-4819-a28c-51a0a6892884",
+      "name": "Preprocess",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "=http://172.21.0.3:11434/api/embed",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"model\": \"nomic-embed-text:latest\",\n  \"input\": \"{{$json.normalizedText}}\"\n}"
+      },
+      "name": "Ollama Embed1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        0,
+        192
+      ],
+      "id": "c2ea2143-bb79-4a32-af57-c09b1944391f"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Получаем первый embedding из ответа Ollama\nconst embedding = $json.embeddings[0];\n\n// Формируем объект для вставки в Postgres\nreturn [{\n  json: {\n    id: $item(0).$node[\"Preprocess\"].json.id,\n    text: $item(0).$node[\"Preprocess\"].json.text,\n    source: $item(0).$node[\"Preprocess\"].json.source,\n    embedding_vec: embedding  // передаем массив чисел напрямую\n  }\n}];"
+      },
+      "id": "b4feb809-0a87-4d1f-9f2b-cea3cff0c86b",
+      "name": "Format Embedding1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        192,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "table": "documents",
+        "columns": "id,text,embedding_vec",
+        "additionalFields": {}
+      },
+      "id": "899190b9-2230-4f8d-b51b-7a0092ae7dfb",
+      "name": "Postgres Insert1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        384,
+        192
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "wujVNwu5jIKjF2n0",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// В n8n входные данные — массив items\n// Каждый item.json должен содержать ключ text\n\nconst stopWords = [\n  \"и\", \"в\", \"во\", \"не\", \"что\", \"он\", \"на\", \"я\", \"с\", \"со\",\n  \"как\", \"а\", \"то\", \"все\", \"она\", \"так\", \"его\", \"но\", \"да\",\n  \"ты\", \"к\", \"у\", \"же\", \"вы\", \"за\", \"бы\", \"по\", \"ее\", \"мне\",\n  \"было\", \"вот\", \"от\", \"меня\", \"еще\", \"нет\", \"о\", \"из\", \"ему\",\n  \"теперь\", \"когда\", \"даже\", \"ну\", \"вдруг\", \"ли\", \"если\", \"уже\",\n  \"или\", \"ни\", \"быть\", \"был\", \"него\", \"до\", \"вас\", \"нибудь\",\n  \"опять\", \"уж\", \"вам\", \"ведь\", \"там\", \"потом\", \"себя\", \"ничего\",\n  \"ей\", \"может\", \"они\", \"тут\", \"где\", \"есть\", \"надо\", \"ней\",\n  \"для\", \"мы\", \"тебя\", \"их\", \"чем\", \"была\", \"сам\", \"чтоб\",\n  \"без\", \"будто\", \"чего\", \"раз\", \"тоже\", \"себе\", \"под\", \"будет\",\n  \"ж\", \"тогда\", \"кто\", \"этот\", \"того\", \"потому\", \"этого\"\n];\n\n// Преобразуем каждый item\nreturn items.map(item => {\n  let text = item.json.text;\n\n  if (!text) {\n    item.json.normalizedText = \"\";\n    return item;\n  }\n\n  // 1. Приведение к нижнему регистру\n  text = text.toLowerCase();\n\n  // 2. Удаление спецсимволов (оставим буквы, цифры и пробелы)\n  text = text.replace(/[^а-яёa-z0-9\\s]/gi, ' ');\n\n  // 3. Замена нескольких пробелов на один\n  text = text.replace(/\\s+/g, ' ').trim();\n\n  // 4. Удаление стоп-слов\n  text = text.split(' ').filter(word => !stopWords.includes(word)).join(' ');\n\n  item.json.normalizedText = text;\n\n  return item;\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        192
+      ],
+      "id": "b08147f8-e8b0-4f67-8a77-85e6ed288e37",
+      "name": "normalizedText"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Kafka Trigger": {
+      "main": [
+        [
+          {
+            "node": "Preprocess",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preprocess": {
+      "main": [
+        [
+          {
+            "node": "normalizedText",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Embed1": {
+      "main": [
+        [
+          {
+            "node": "Format Embedding1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Embedding1": {
+      "main": [
+        [
+          {
+            "node": "Postgres Insert1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "normalizedText": {
+      "main": [
+        [
+          {
+            "node": "Ollama Embed1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "002271dc-d46f-4d57-acb3-e2e0006aa91a",
+  "meta": {
+    "instanceId": "9ce263ea74ac56142ad0b445edd4996f0dce195bb2058608aecc86f0fd24906f"
+  },
+  "id": "3oyN1jUT3M4kA3mF",
+  "tags": []
+}
