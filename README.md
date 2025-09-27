@@ -56,6 +56,9 @@ Embedding Pipeline (n8n + Kafka + Ollama + Postgres) - kafka+postgresql.json
 	•	text — оригинальный текст.
 	•	embedding_vec — векторное представление текста.
 
+
+	
+
 🤖 RAG Query Pipeline (n8n + Postgres + Ollama) - Real-Time Knowledge Agent.json
 
 Этот workflow в n8n реализует RAG (Retrieval-Augmented Generation):
