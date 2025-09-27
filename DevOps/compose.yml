@@ -1,0 +1,123 @@
+services:
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama-data:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - app-network
+    environment:
+      - OLLAMA_MODE=cpu
+
+  postgresql:
+    image: bitnami/postgresql
+    container_name: postgresql
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRESQL_USERNAME=myuser
+      - POSTGRESQL_PASSWORD=mypassword
+      - POSTGRESQL_DATABASE=mydatabase
+      - POSTGRESQL_POSTGRES_PASSWORD=superpassword
+    volumes:
+      - ./postgresql_data:/bitnami/postgresql
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu] 
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  n8n:
+    image: n8nio/n8n
+    container_name: n8n
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=n8n.local
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_EDITOR_BASE_URL=http://localhost:5678
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - N8N_COOKIE_SECURITY=none
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=Europe/Moscow
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgresql
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=mydatabase
+      - DB_POSTGRESDB_USER=myuser
+      - DB_POSTGRESDB_PASSWORD=mypassword
+      - N8N_ALLOWED_FILE_SYSTEM_PATHS=/home/node/.n8n
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      - N8N_SECURE_COOKIE=false
+    volumes:
+      - ./n8n-data:/home/node/.n8n
+      - ./pdf-upload:/tmp/files
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@example.com
+      - PGADMIN_DEFAULT_PASSWORD=admin123
+    volumes:
+      - ./pgadmin_data:/var/lib/pgadmin
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  flowise:
+    image: flowiseai/flowise
+    container_name: flowise
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - FLOWISE_USERNAME=admin
+      - FLOWISE_PASSWORD=qwertY@sh00
+      - DATABASE_PATH=/root/.flowise
+    volumes:
+      - ./flowise:/root/.flowise
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  langflow:
+    image: langflowai/langflow:latest
+    container_name: langflow
+    ports:
+      - "7860:7860"
+    environment:
+      - LANGFLOW_ENV=production
+    volumes:
+      - ./langflow_data:/app/data
+    restart: unless-stopped
+    networks:
+      - app-network    
+
+networks:
+  app-network:
+    driver: bridge
+    external: true
+
