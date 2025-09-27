@@ -1,0 +1,282 @@
+{
+  "name": "Real-Time Knowledge Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rag_query",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        64,
+        0
+      ],
+      "id": "0114f849-59b9-4332-93eb-9909f46084e4",
+      "webhookId": "7f81a532-a131-4aa3-b21e-73751bcaefe5"
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "http://172.21.0.3:11434/api/embed",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"model\": \"nomic-embed-text:latest\",\n  \"input\": \"{{ $json.body.query }}\"\n}"
+      },
+      "name": "Generate Embedding",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        320,
+        -160
+      ],
+      "id": "7f62825a-0ecb-4fbc-adad-e79ec9fab02b"
+    },
+    {
+      "parameters": {
+        "jsCode": "const vector = $json[\"embeddings\"][0];\nconst vectorStr = vector.join(',');\nreturn [{ json: { sql: `SELECT id, text, embedding_vec <=> ARRAY[${vectorStr}]::vector AS distance FROM documents ORDER BY distance ASC LIMIT 5;` } }];"
+      },
+      "name": "Build SQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        -160
+      ],
+      "id": "55ea11fa-5dfc-4973-b481-f5481cb9015e"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{$json[\"sql\"]}}",
+        "additionalFields": {}
+      },
+      "name": "Postgres Vector Search",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        704,
+        -160
+      ],
+      "id": "28066aed-de6f-4ce6-8f3a-1f674c7d8073",
+      "credentials": {
+        "postgres": {
+          "id": "wujVNwu5jIKjF2n0",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Берём все входные items\nconst items = $input.all();\n\n// Достаём поле \"text\" и соединяем их в одну строку\nconst result = items.map(item => item.json.text).join(\"\\n\");\n\n// Отдаём как строку\nreturn [{ json: { result } }];"
+      },
+      "name": "Format Results",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        944,
+        -160
+      ],
+      "id": "06736b2b-9e03-4132-a7c9-50b8b062bfe9"
+    },
+    {
+      "parameters": {
+        "model": "lakomoor/vikhr-llama-3.2-1b-instruct:q3_k_m",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        224
+      ],
+      "id": "fda9bbc1-ca11-49d8-a78c-c3407f66e483",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "zPsJt7OpzXvRgLMw",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "default"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1712,
+        224
+      ],
+      "id": "d8f3b67d-9b4f-45fe-8a52-dfffdc31de1e",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1216,
+        -16
+      ],
+      "id": "8cd66b0f-462e-4969-bf7f-c24a6e8d612f",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=={{ $json.result }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1616,
+        -16
+      ],
+      "id": "34e36c3f-801f-40a8-a732-737cc0512fcf",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $input.all()[0].json.result\nconst query = $input.all()[1].json.body.query;\n\n// Склеиваем как строку\nconst result = `Текст: ${text}\\nВопрос: ${query}`;\n\nreturn [{ json: { result } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        -16
+      ],
+      "id": "95c34b4e-c6d8-4d1d-89be-e83e03da0c81",
+      "name": "Code"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Generate Embedding",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Generate Embedding": {
+      "main": [
+        [
+          {
+            "node": "Build SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build SQL": {
+      "main": [
+        [
+          {
+            "node": "Postgres Vector Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Vector Search": {
+      "main": [
+        [
+          {
+            "node": "Format Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Results": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        []
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "aa4362fe-3786-457a-aa12-77de570553fc",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9ce263ea74ac56142ad0b445edd4996f0dce195bb2058608aecc86f0fd24906f"
+  },
+  "id": "3TvUsnSeGaysGmuE",
+  "tags": []
+}
