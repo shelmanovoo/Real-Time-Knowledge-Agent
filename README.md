@@ -1,5 +1,8 @@
 Embedding Pipeline (n8n + Kafka + Ollama + Postgres) - kafka+postgresql.json
 
+<img width="1167" height="347" alt="изображение" src="https://github.com/user-attachments/assets/cbc3dc3a-afb4-43cd-88d4-2259b848ecd0" />
+
+
 Этот workflow в n8n реализует конвейер обработки текстовых сообщений:
 он получает сообщения из Kafka, нормализует текст, создает векторные представления (embeddings) с помощью Ollama, и сохраняет результаты в Postgres для последующего поиска и анализа.
 
@@ -60,6 +63,9 @@ Embedding Pipeline (n8n + Kafka + Ollama + Postgres) - kafka+postgresql.json
 	
 
 🤖 RAG Query Pipeline (n8n + Postgres + Ollama) - Real-Time Knowledge Agent.json
+
+<img width="1180" height="449" alt="изображение" src="https://github.com/user-attachments/assets/a2ed0667-19c6-41fe-b9a4-8dc4554d1210" />
+
 
 Этот workflow в n8n реализует RAG (Retrieval-Augmented Generation):
 он принимает запрос через Webhook, ищет релевантные документы по векторному поиску в Postgres, а затем формирует финальный ответ с помощью LLM (Ollama).
